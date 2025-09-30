@@ -3,6 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <title>Finance Tracker</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: auto; }
+        input { margin: 5px; padding: 5px; }
+        button { margin: 5px; padding: 5px 10px; }
+        ul { list-style: none; padding: 0; }
+        li { margin: 5px 0; }
+    </style>
 </head>
 <body>
 <h1>Personal Finance Tracker</h1>
@@ -20,114 +27,100 @@
 <h2>Balance: <span id="balance"></span></h2>
 
 <script>
-    let editingId = null; // null if adding, set to transaction id if editing
+    let editingId = null;
+    const BASE_URL = "/api/transactions"; // relative URL since frontend served from Spring Boot
 
     async function loadTransactions() {
-      try {
-        let res = await fetch("/api/transactions/all");
-        let data = await res.json();
-
-        document.getElementById("transactionList").innerHTML =
-          data.map(t => `
-            <li>
-              ${t.type} - ${t.category} - ${t.amount} (${t.date || "no date"})
-              <button onclick="editTransaction(${t.id})">Edit</button>
-              <button onclick="deleteTransaction(${t.id})">Delete</button>
-            </li>
-          `).join("");
-      } catch (err) {
-        console.error(err);
-        alert("Error loading transactions. See console for details.");
-      }
+        try {
+            let res = await fetch(`${BASE_URL}/all`);
+            let data = await res.json();
+            document.getElementById("transactionList").innerHTML =
+                data.map(t => `
+                <li>
+                    ${t.type} - ${t.category} - ${t.amount} (${t.date || "no date"})
+                    <button onclick="editTransaction(${t.id})">Edit</button>
+                    <button onclick="deleteTransaction(${t.id})">Delete</button>
+                </li>
+            `).join("");
+        } catch (err) {
+            console.error(err);
+            alert("Error loading transactions. See console for details.");
+        }
     }
 
     async function saveTransaction() {
-      const transaction = {
-        type: document.getElementById("type").value,
-        category: document.getElementById("category").value,
-        amount: parseFloat(document.getElementById("amount").value),
-        date: new Date().toISOString().split("T")[0]
-      };
-
-      try {
-        let url = "/api/transactions/add";
-        let method = "POST";
-
-        if (editingId !== null) {
-          url = "/api/transactions/" + editingId;
-          method = "PUT";
+        const transaction = {
+            type: document.getElementById("type").value,
+            category: document.getElementById("category").value,
+            amount: parseFloat(document.getElementById("amount").value),
+            date: new Date().toISOString().split("T")[0]
+        };
+        try {
+            let url = editingId ? `${BASE_URL}/${editingId}` : `${BASE_URL}/add`;
+            let method = editingId ? "PUT" : "POST";
+            let res = await fetch(url, {
+                method: method,
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(transaction)
+            });
+            if (!res.ok) throw new Error("Failed to save transaction: " + res.status);
+            editingId = null;
+            document.getElementById("saveBtn").innerText = "Add";
+            document.getElementById("type").value = "";
+            document.getElementById("category").value = "";
+            document.getElementById("amount").value = "";
+            loadTransactions();
+            loadBalance();
+        } catch (err) {
+            console.error(err);
+            alert("Error saving transaction. See console for details.");
         }
-
-        let res = await fetch(url, {
-          method: method,
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(transaction)
-        });
-
-        if (!res.ok) throw new Error("Failed to save transaction: " + res.status);
-
-        // Reset form
-        editingId = null;
-        document.getElementById("saveBtn").innerText = "Add";
-        document.getElementById("type").value = "";
-        document.getElementById("category").value = "";
-        document.getElementById("amount").value = "";
-
-        loadTransactions();
-        loadBalance();
-      } catch (err) {
-        console.error(err);
-        alert("Error saving transaction. See console for details.");
-      }
     }
 
     async function editTransaction(id) {
-      try {
-        let res = await fetch("/api/transactions/all");
-        let data = await res.json();
-        const t = data.find(tx => tx.id === id);
-        if (!t) return alert("Transaction not found");
-
-        document.getElementById("type").value = t.type;
-        document.getElementById("category").value = t.category;
-        document.getElementById("amount").value = t.amount;
-
-        editingId = id;
-        document.getElementById("saveBtn").innerText = "Save";
-      } catch (err) {
-        console.error(err);
-        alert("Error editing transaction. See console for details.");
-      }
+        try {
+            let res = await fetch(`${BASE_URL}/all`);
+            let data = await res.json();
+            const t = data.find(tx => tx.id === id);
+            if (!t) return alert("Transaction not found");
+            document.getElementById("type").value = t.type;
+            document.getElementById("category").value = t.category;
+            document.getElementById("amount").value = t.amount;
+            editingId = id;
+            document.getElementById("saveBtn").innerText = "Save";
+        } catch (err) {
+            console.error(err);
+            alert("Error editing transaction. See console for details.");
+        }
     }
 
     async function deleteTransaction(id) {
-      if (!confirm("Are you sure you want to delete this transaction?")) return;
-
-      try {
-        let res = await fetch("/api/transactions/" + id, { method: "DELETE" });
-        if (!res.ok) throw new Error("Failed to delete transaction: " + res.status);
-        loadTransactions();
-        loadBalance();
-      } catch (err) {
-        console.error(err);
-        alert("Error deleting transaction. See console for details.");
-      }
+        if (!confirm("Are you sure you want to delete this transaction?")) return;
+        try {
+            let res = await fetch(`${BASE_URL}/${id}`, { method: "DELETE" });
+            if (!res.ok) throw new Error("Failed to delete transaction: " + res.status);
+            loadTransactions();
+            loadBalance();
+        } catch (err) {
+            console.error(err);
+            alert("Error deleting transaction. See console for details.");
+        }
     }
 
     async function loadBalance() {
-      try {
-        let res = await fetch("/api/transactions/balance");
-        let balance = await res.text();
-        document.getElementById("balance").innerText = balance;
-      } catch (err) {
+       try {
+        let res = await fetch(`${BASE_URL}/balance`);
+        let data = await res.json(); // read JSON object { "balance": number }
+        document.getElementById("balance").innerText = data.balance;
+    } catch (err) {
         console.error(err);
         alert("Error loading balance. See console for details.");
-      }
     }
+}
 
-    // Initial load
     loadTransactions();
     loadBalance();
 </script>
 </body>
 </html>
+

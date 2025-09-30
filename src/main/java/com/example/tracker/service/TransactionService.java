@@ -15,49 +15,42 @@ public class TransactionService {
         this.repository = repository;
     }
 
-    public List<Transaction> getAll(){
+
+    public List<Transaction> getAllTransactions() {
         return repository.findAll();
     }
-    public Transaction addTransaction(Transaction t) {
-        if (t.getType() == null) {
-            throw new IllegalArgumentException("Transaction type cannot be null");
-        }
 
-        String normalizedType = t.getType().toLowerCase();
-
-        if (!normalizedType.equals("income") && !normalizedType.equals("expense")) {
-            throw new IllegalArgumentException("Invalid transaction type: " + t.getType() + ". Must be 'income' or 'expense'.");
-        }
-
-        t.setType(normalizedType); // always save lowercase
-        return repository.save(t);
+    public Transaction addTransaction(Transaction transaction) {
+        return repository.save(transaction);
     }
 
-    public Transaction updateTransaction(Long id, Transaction t) {
+    public Transaction updateTransaction(Long id, Transaction updated) {
         return repository.findById(id)
                 .map(existing -> {
-                    existing.setType(t.getType());
-                    existing.setCategory(t.getCategory());
-                    existing.setAmount(t.getAmount());
-                    existing.setDate(t.getDate());
+                    existing.setType(updated.getType());
+                    existing.setCategory(updated.getCategory());
+                    existing.setAmount(updated.getAmount());
+                    existing.setDate(updated.getDate());
                     return repository.save(existing);
                 })
-                .orElseThrow(() -> new RuntimeException("Transaction not found with id " + id));
+                .orElseThrow(() -> new RuntimeException("Transaction not found"));
     }
 
-
-    public void deleteTransaction(Long id){
+    public void deleteTransaction(Long id) {
         repository.deleteById(id);
     }
 
     public double getBalance() {
-        return repository.findAll().stream()
-                .mapToDouble(t ->
-                        t.getType() != null && t.getType().equalsIgnoreCase("income")
-                                ? t.getAmount()
-                                : -t.getAmount()
-                )
+        List<Transaction> transactions = repository.findAll();
+        double income = transactions.stream()
+                .filter(t -> "income".equalsIgnoreCase(t.getType()))
+                .mapToDouble(Transaction::getAmount)
                 .sum();
+        double expense = transactions.stream()
+                .filter(t -> "expense".equalsIgnoreCase(t.getType()))
+                .mapToDouble(Transaction::getAmount)
+                .sum();
+        return income - expense;
     }
 
 
